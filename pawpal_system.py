@@ -20,7 +20,6 @@ class PetInfo:
     name: str
     species: str = "dog"
     age: int = 0
-    needs: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -43,6 +42,7 @@ class Task:
     title: str
     duration_minutes: int
     priority: str = "medium"
+    pet_name: str = ""  # which pet this task is for
 
     def priority_score(self) -> int:
         """Return a numeric score so tasks can be ranked (higher = more urgent)."""
@@ -63,19 +63,32 @@ class Schedule:
     def add_task(self, task: Task) -> None:
         self.tasks.append(task)
 
+    def _is_preferred(self, task: Task) -> bool:
+        """True if the task matches one of the owner's preferred keywords.
+
+        The owner sets preferences like {"prefer": ["walk", "meds"]}; any
+        task whose title contains a keyword is treated as preferred.
+        """
+        prefer = self.owner.preferences.get("prefer", [])
+        return any(keyword.lower() in task.title.lower() for keyword in prefer)
+
     def generate(self) -> list[Task]:
         """Choose and order tasks that fit within the owner's available time.
 
-        Strategy: highest priority first; among equal priority, shorter
-        tasks first (so we can fit more of them). Skip any task that would
-        blow the time budget.
+        Strategy: highest priority first; among equal priority, the owner's
+        preferred tasks first, then shorter tasks (so we can fit more of them).
+        Skip any task that would blow the time budget.
         """
         self.plan = []
         remaining = self.owner.available_minutes
 
         ranked = sorted(
             self.tasks,
-            key=lambda t: (-t.priority_score(), t.duration_minutes),
+            key=lambda t: (
+                -t.priority_score(),
+                0 if self._is_preferred(t) else 1,
+                t.duration_minutes,
+            ),
         )
 
         for task in ranked:
@@ -96,9 +109,11 @@ class Schedule:
             f"({used}/{self.owner.available_minutes} min used):",
         ]
         for i, task in enumerate(self.plan, start=1):
+            who = f" for {task.pet_name}" if task.pet_name else ""
+            star = " (preferred)" if self._is_preferred(task) else ""
             lines.append(
-                f"  {i}. {task.title} "
-                f"({task.duration_minutes} min) [priority: {task.priority}]"
+                f"  {i}. {task.title}{who} "
+                f"({task.duration_minutes} min) [priority: {task.priority}]{star}"
             )
 
         skipped = [t for t in self.tasks if t not in self.plan]
@@ -111,14 +126,18 @@ class Schedule:
 
 
 if __name__ == "__main__":
-    owner = UserInfo(name="Jordan", available_minutes=60)
+    owner = UserInfo(
+        name="Jordan",
+        available_minutes=60,
+        preferences={"prefer": ["walk"]},
+    )
     owner.add_pet(PetInfo(name="Mochi", species="cat", age=3))
 
     schedule = Schedule(owner=owner)
-    schedule.add_task(Task("Morning walk", 30, "high"))
-    schedule.add_task(Task("Feeding", 10, "high"))
-    schedule.add_task(Task("Grooming", 25, "low"))
-    schedule.add_task(Task("Enrichment play", 15, "medium"))
+    schedule.add_task(Task("Morning walk", 30, "high", pet_name="Mochi"))
+    schedule.add_task(Task("Feeding", 10, "high", pet_name="Mochi"))
+    schedule.add_task(Task("Grooming", 25, "low", pet_name="Mochi"))
+    schedule.add_task(Task("Enrichment play", 15, "medium", pet_name="Mochi"))
 
     schedule.generate()
     print(schedule.explain())

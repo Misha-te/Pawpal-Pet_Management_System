@@ -13,7 +13,6 @@ classDiagram
         +str name
         +str species
         +int age
-        +list~str~ needs
     }
 
 
@@ -21,6 +20,7 @@ classDiagram
         +str title
         +int duration_minutes
         +str priority
+        +str pet_name
         +priority_score() int
     }
 
@@ -32,9 +32,11 @@ classDiagram
         +add_task(task: Task) None
         +generate() list~Task~
         +explain() str
+        -_is_preferred(task: Task) bool
     }
 
 
     UserInfo "1" --> "*" PetInfo : owns
     Schedule "1" o-- "*" Task : contains
     Schedule "1" --> "1" UserInfo : plans for
+    Task "*" --> "1" PetInfo : is for
