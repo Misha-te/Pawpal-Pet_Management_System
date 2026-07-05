@@ -21,6 +21,11 @@ kyle.add_task(Task("Feeding", 10, "high", due_time="07:30"))
 emmy.add_task(Task("Feeding", 10, "high", due_time="08:15"))
 kyle.add_task(Task("Morning walk", 30, "high", due_time="08:00"))
 
+# Two conflicting tasks: the 30-min vet visit at 12:00 runs until 12:30,
+# but grooming is scheduled at 12:15 — the scheduler should warn about this.
+kyle.add_task(Task("Vet visit", 30, "high", due_time="12:00"))
+emmy.add_task(Task("Grooming", 20, "medium", due_time="12:15"))
+
 # 4. Give the pets to John
 johnte.add_pet(kyle)
 johnte.add_pet(emmy)

@@ -7,7 +7,8 @@ Backbone for the pet care planner. Four objects:
 - Schedule : the scheduler that plans across ALL of the owner's pets
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import date, timedelta
 
 # Maps a priority label to a number the scheduler can sort by.
 PRIORITY_SCORES = {"low": 1, "medium": 2, "high": 3}
@@ -39,6 +40,7 @@ class Task:
     priority: str = "medium"
     frequency: str = "daily"  # e.g. "daily", "weekly", "once"
     due_time: str = ""  # e.g. "08:00"; blank means "any time"
+    due_date: date | None = None  # calendar date the task is due; None = unscheduled
     completed: bool = False
     pet_name: str = ""  # set automatically when added to a pet
 
@@ -46,9 +48,34 @@ class Task:
         """Return a numeric score so tasks can be ranked (higher = more urgent)."""
         return PRIORITY_SCORES.get(self.priority, 0)
 
-    def mark_complete(self) -> None:
-        """Mark this task as done so the scheduler stops planning it."""
+    def next_occurrence(self) -> "Task | None":
+        """Build the next instance of a recurring task.
+
+        Uses timedelta to roll the due date forward from today:
+        - "daily"  -> today + 1 day
+        - "weekly" -> today + 7 days
+        - anything else ("once") does not repeat, so return None.
+
+        The returned Task is a fresh, not-yet-completed copy (same
+        description, duration, priority, pet, etc.).
+        """
+        if self.frequency == "daily":
+            next_date = date.today() + timedelta(days=1)
+        elif self.frequency == "weekly":
+            next_date = date.today() + timedelta(weeks=1)
+        else:
+            return None
+        return replace(self, completed=False, due_date=next_date)
+
+    def mark_complete(self) -> "Task | None":
+        """Mark this task done and return the next occurrence for recurring tasks.
+
+        The scheduler stops planning this (completed) task. For a daily or
+        weekly task, a new instance for the next occurrence is created and
+        returned so the caller can schedule it; one-off tasks return None.
+        """
         self.completed = True
+        return self.next_occurrence()
 
 
 @dataclass
@@ -72,6 +99,18 @@ class PetInfo:
     def pending_tasks(self) -> list[Task]:
         """Return only the tasks that still need to be done."""
         return [t for t in self.tasks if not t.completed]
+
+    def complete_task(self, task: Task) -> "Task | None":
+        """Mark one of this pet's tasks done and auto-add its next occurrence.
+
+        For a daily/weekly task, the freshly created next instance is
+        appended to this pet's task list automatically and returned;
+        one-off tasks just get marked complete and return None.
+        """
+        next_task = task.mark_complete()
+        if next_task is not None:
+            self.add_task(next_task)
+        return next_task
 
 
 @dataclass
@@ -165,6 +204,31 @@ class Schedule:
         self.plan = sorted(chosen, key=lambda t: time_key(t.due_time))
         return self.plan
 
+    def detect_conflicts(self) -> list[str]:
+        """Lightweight check for overlapping time blocks in the current plan.
+
+        Treats each timed task as a block [due_time, due_time + duration) and
+        flags any pair where a task starts before the previous one finishes.
+        Deliberately forgiving: untimed tasks are ignored and nothing here
+        raises — it just returns a list of human-readable warning strings
+        (empty if the plan has no clashes).
+        """
+        warnings = []
+        # Only timed tasks can clash; keep them in chronological order.
+        timed = sorted(
+            (t for t in self.plan if time_key(t.due_time) < 24 * 60),
+            key=lambda t: time_key(t.due_time),
+        )
+        for earlier, later in zip(timed, timed[1:]):
+            earlier_end = time_key(earlier.due_time) + earlier.duration_minutes
+            overlap = earlier_end - time_key(later.due_time)
+            if overlap > 0:
+                warnings.append(
+                    f"⚠ '{later.description}' ({later.due_time}) starts before "
+                    f"'{earlier.description}' finishes — overlap of {overlap} min"
+                )
+        return warnings
+
     def explain(self) -> str:
         """Return a human-readable summary of the plan and why it was chosen."""
         if not self.plan:
@@ -184,6 +248,12 @@ class Schedule:
                 f"({task.duration_minutes} min, {task.frequency}) "
                 f"[priority: {task.priority}]{star}"
             )
+
+        conflicts = self.detect_conflicts()
+        if conflicts:
+            lines.append("Schedule conflicts:")
+            for warning in conflicts:
+                lines.append(f"  {warning}")
 
         chosen = set(id(t) for t in self.plan)
         skipped = [t for t in self._pending_tasks() if id(t) not in chosen]
