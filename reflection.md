@@ -14,19 +14,19 @@
 
 - What classes did you include, and what responsibilities did you assign to each?
 1. PetInfo — the pet
-Holds basic facts about a pet: name, species, age, and a list of needs. It's a pure data class — it doesn't do any work, it just stores information the rest of the system reads. One owner can have several of these.
+Holds basic facts about a pet: name, species, and age. It's a pure data class — it doesn't do any work, it just stores information the rest of the system reads. One owner can have several of these.
 
 2. UserInfo — the owner
 Represents the pet owner and, importantly, the constraints they bring to a day: their name, how much time they have (available_minutes), their preferences, and the pets they own. Its one behavior is add_pet(), which links a PetInfo to the owner. This class is where the scheduler learns "how much time is available."
 
 3. Task — one care action
-Represents a single thing that needs to happen — a walk, a feeding, meds. It stores title, duration_minutes, and priority. Its one method, priority_score(), converts the text priority ("high"/"medium"/"low") into a number so tasks can be ranked and sorted. Like PetInfo, it's mostly a data holder, but it owns the small rule of how to score itself.
+Represents a single thing that needs to happen — a walk, a feeding, meds. It stores title, duration_minutes, priority, and pet_name (which pet the task is for). Its one method, priority_score(), converts the text priority ("high"/"medium"/"low") into a number so tasks can be ranked and sorted. Like PetInfo, it's mostly a data holder, but it owns the small rule of how to score itself.
 
 4. Schedule — the planner (the brains)
 This is the only class that does real logic. It takes the owner and a list of tasks, then:
 
 add_task() — collects the tasks to consider
-generate() — chooses and orders tasks under the owner's time budget (highest priority first, shorter tasks first to fit more)
+generate() — chooses and orders tasks under the owner's time budget (highest priority first; among equal priority, the owner's preferred tasks first, then shorter tasks to fit more)
 explain() — produces a human-readable plan and states why each task was chosen and what got skipped
 
 **b. Design changes**
