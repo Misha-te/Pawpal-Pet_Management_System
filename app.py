@@ -54,7 +54,7 @@ st.caption("Add a few tasks. These feed into your scheduler below.")
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 with col1:
     task_title = st.text_input("Task title", value="Morning walk")
 with col2:
@@ -63,11 +63,13 @@ with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 with col4:
     due_time = st.text_input("Due (HH:MM)", value="08:00")
+with col5:
+    frequency = st.selectbox("Frequency", ["daily", "weekly", "once"], index=0)
 
 if st.button("Add task"):
     # Build a real Task object from the inputs and remember it across reruns.
     st.session_state.tasks.append(
-        Task(task_title, int(duration), priority, due_time=due_time)
+        Task(task_title, int(duration), priority, frequency=frequency, due_time=due_time)
     )
 
 if st.session_state.tasks:
@@ -79,6 +81,7 @@ if st.session_state.tasks:
                 "minutes": t.duration_minutes,
                 "priority": t.priority,
                 "due": t.due_time,
+                "frequency": t.frequency,
             }
             for t in st.session_state.tasks
         ]
@@ -102,7 +105,58 @@ if st.button("Generate schedule"):
         owner.add_pet(pet)
 
         schedule = Schedule(owner=owner)
-        schedule.generate()
+        plan = schedule.generate()  # tasks come back sorted by time
 
-        st.success("Here's today's plan:")
-        st.text(schedule.explain())
+        # Headline summary of the plan.
+        used = sum(t.duration_minutes for t in plan)
+        st.success(
+            f"Today's plan for {owner_name}: "
+            f"{len(plan)} task(s) scheduled, {used}/{int(available_minutes)} min used."
+        )
+
+        # The sorted plan, rendered as a clean table (chronological order).
+        st.markdown("#### 🗓️ Today's plan (sorted by time)")
+        st.table(
+            [
+                {
+                    "time": t.due_time or "anytime",
+                    "task": t.description,
+                    "pet": t.pet_name,
+                    "minutes": t.duration_minutes,
+                    "priority": t.priority,
+                    "frequency": t.frequency,
+                }
+                for t in plan
+            ]
+        )
+
+        # Conflict warnings from the scheduler's lightweight overlap check.
+        conflicts = schedule.detect_conflicts()
+        if conflicts:
+            st.markdown("#### ⚠️ Schedule conflicts")
+            for warning in conflicts:
+                st.warning(warning.removeprefix("⚠ "))
+        else:
+            st.info("No time conflicts detected. ✅")
+
+        # Tasks that didn't fit the time budget (filter out the scheduled ones).
+        scheduled_ids = {id(t) for t in plan}
+        skipped = [
+            t for t in owner.filter_tasks(completed=False) if id(t) not in scheduled_ids
+        ]
+        if skipped:
+            st.markdown("#### ⏭️ Skipped (not enough time)")
+            st.table(
+                [
+                    {
+                        "task": t.description,
+                        "minutes": t.duration_minutes,
+                        "priority": t.priority,
+                    }
+                    for t in skipped
+                ]
+            )
+
+        # Keep the full text explanation available, but tucked away.
+        with st.expander("Full text explanation"):
+            st.text(schedule.explain())
