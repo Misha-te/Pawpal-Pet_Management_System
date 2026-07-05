@@ -1,0 +1,35 @@
+classDiagram
+    class UserInfo {
+        +str name
+        +int available_minutes
+        +dict preferences
+        +list~PetInfo~ pets
+        +add_pet(pet: PetInfo) None
+    }
+
+    class PetInfo {
+        +str name
+        +str species
+        +int age
+        +list~str~ needs
+    }
+
+    class Task {
+        +str title
+        +int duration_minutes
+        +str priority
+        +priority_score() int
+    }
+
+    class Schedule {
+        +UserInfo owner
+        +list~Task~ tasks
+        +list~Task~ plan
+        +add_task(task: Task) None
+        +generate() list~Task~
+        +explain() str
+    }
+
+    UserInfo "1" --> "*" PetInfo : owns
+    Schedule "1" o-- "*" Task : contains
+    Schedule "1" --> "1" UserInfo : plans for
