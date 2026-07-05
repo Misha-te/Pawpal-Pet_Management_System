@@ -13,20 +13,20 @@
  - My initial UML design has four classes. PetInfo and UserInfo store the pet's and owner's basic information, with UserInfo also holding the owner's available time and preferences. Task represents a single care action with a title, duration, and priority. Schedule is the planning class that holds the tasks and contains the scheduling logic (generate() and explain()). The relationships are: one UserInfo owns many PetInfo objects, and one Schedule contains many Task objects and plans for one UserInfo. I split the design so the first three classes just hold data while Schedule does all the decision-making.
 
 - What classes did you include, and what responsibilities did you assign to each?
-1. PetInfo — the pet
-Holds basic facts about a pet: name, species, and age. It's a pure data class — it doesn't do any work, it just stores information the rest of the system reads. One owner can have several of these.
+1. Task — one care action
+Represents a single thing that needs to happen — a walk, a feeding, meds. It stores description, duration_minutes, priority, due_time, a completed flag, and pet_name (which pet the task is for). It has two methods: priority_score(), which converts the text priority ("high"/"medium"/"low") into a number so tasks can be ranked, and mark_complete(), which flags the task as done so the scheduler stops planning it.
 
-2. UserInfo — the owner
-Represents the pet owner and, importantly, the constraints they bring to a day: their name, how much time they have (available_minutes), their preferences, and the pets they own. Its one behavior is add_pet(), which links a PetInfo to the owner. This class is where the scheduler learns "how much time is available."
+2. PetInfo — the pet
+Holds basic facts about a pet (name, species, age) AND owns that pet's list of tasks. Its methods let you manage those tasks: add_task() attaches a task and stamps it with the pet's name, list_tasks() returns all of them, and pending_tasks() returns only the ones that aren't done yet. So each pet is responsible for its own tasks.
 
-3. Task — one care action
-Represents a single thing that needs to happen — a walk, a feeding, meds. It stores title, duration_minutes, priority, and pet_name (which pet the task is for). Its one method, priority_score(), converts the text priority ("high"/"medium"/"low") into a number so tasks can be ranked and sorted. Like PetInfo, it's mostly a data holder, but it owns the small rule of how to score itself.
+3. UserInfo — the owner
+Represents the pet owner and the constraints they bring to a day: their name, how much time they have (available_minutes), their preferences, and the pets they own. Its methods are add_pet() and list_pets(). This class is where the scheduler learns "how much time is available" and which pets exist.
 
-4. Schedule — the planner (the brains)
-This is the only class that does real logic. It takes the owner and a list of tasks, then:
+4. Schedule — the scheduler (the brains)
+This is the only class that does real logic, and it works across ALL of the owner's pets, not just one. Its methods:
 
-add_task() — collects the tasks to consider
-generate() — chooses and orders tasks under the owner's time budget (highest priority first; among equal priority, the owner's preferred tasks first, then shorter tasks to fit more)
+all_tasks() — gathers the pending tasks from every pet the owner has
+generate() — a two-phase plan: first it SELECTS which tasks fit the time budget (highest priority first; among equal priority, the owner's preferred tasks first, then shorter tasks to fit more), then it ORDERS the chosen tasks by due_time so the day reads chronologically
 explain() — produces a human-readable plan and states why each task was chosen and what got skipped
 
 **b. Design changes**
@@ -37,7 +37,11 @@ Yes. My initial design had Task and PetInfo as separate classes with no link bet
 
 - If yes, describe at least one change and why you made it.
 
-The main change was creating a connection between Task and PetInfo by adding a pet_name field to Task. I made this change because, without it, there was no way to tell which pet a task belonged to — in a household with more than one pet, a task like "Feeding" or "Morning walk" was ambiguous. Adding pet_name lets the schedule show exactly which pet each task is for (e.g. "Morning walk for Mochi"). I used a simple pet_name string rather than a full PetInfo reference to keep the UI simple, accepting the tradeoff that the link isn't strictly enforced.
+The first change was creating a connection between Task and PetInfo by adding a pet_name field to Task. I made this change because, without it, there was no way to tell which pet a task belonged to — in a household with more than one pet, a task like "Feeding" or "Morning walk" was ambiguous. Adding pet_name lets the schedule show exactly which pet each task is for (e.g. "Morning walk for Mochi"). I used a simple pet_name string rather than a full PetInfo reference to keep the UI simple, accepting the tradeoff that the link isn't strictly enforced.
+
+I then made a bigger structural change: I moved task ownership into PetInfo. Originally the Schedule held one flat list of every task; now each PetInfo owns its own tasks (add_task/list_tasks/pending_tasks) and the Schedule gathers tasks across all pets with all_tasks(). I made this change because it better matches how the real world works — tasks belong to a pet — and because it lets the scheduler genuinely work across multiple pets instead of one shared list.
+
+I also gave Task more real behavior. I added a due_time so the plan can be ordered chronologically, a completed flag, and a mark_complete() method so finished tasks drop out of future plans (the scheduler only looks at pending tasks). Finally, I removed the unused needs field from PetInfo because it was stored but never actually read by any logic — keeping it would have been dead code.
 
 ---
 

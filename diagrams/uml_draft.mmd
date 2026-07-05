@@ -1,11 +1,14 @@
 classDiagram
 
-    class UserInfo {
-        +str name
-        +int available_minutes
-        +dict preferences
-        +list~PetInfo~ pets
-        +add_pet(pet: PetInfo) None
+    class Task {
+        +str description
+        +int duration_minutes
+        +str priority
+        +str due_time
+        +bool completed
+        +str pet_name
+        +priority_score() int
+        +mark_complete() None
     }
 
 
@@ -13,23 +16,27 @@ classDiagram
         +str name
         +str species
         +int age
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +list_tasks() list~Task~
+        +pending_tasks() list~Task~
     }
 
 
-    class Task {
-        +str title
-        +int duration_minutes
-        +str priority
-        +str pet_name
-        +priority_score() int
+    class UserInfo {
+        +str name
+        +int available_minutes
+        +dict preferences
+        +list~PetInfo~ pets
+        +add_pet(pet: PetInfo) None
+        +list_pets() list~PetInfo~
     }
 
 
     class Schedule {
         +UserInfo owner
-        +list~Task~ tasks
         +list~Task~ plan
-        +add_task(task: Task) None
+        +all_tasks() list~Task~
         +generate() list~Task~
         +explain() str
         -_is_preferred(task: Task) bool
@@ -37,6 +44,6 @@ classDiagram
 
 
     UserInfo "1" --> "*" PetInfo : owns
-    Schedule "1" o-- "*" Task : contains
+    PetInfo "1" o-- "*" Task : has
     Schedule "1" --> "1" UserInfo : plans for
-    Task "*" --> "1" PetInfo : is for
+    Schedule ..> Task : organizes across pets
