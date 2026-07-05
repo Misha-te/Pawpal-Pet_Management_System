@@ -67,9 +67,11 @@ class UserInfo:
     pets: list[PetInfo] = field(default_factory=list)
 
     def add_pet(self, pet: PetInfo) -> None:
+        """Add a pet to this owner's list of pets."""
         self.pets.append(pet)
 
     def list_pets(self) -> list[PetInfo]:
+        """Return all of the owner's pets."""
         return self.pets
 
     def all_tasks(self) -> list[Task]:
