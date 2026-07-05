@@ -25,7 +25,22 @@ kyle.add_task(Task("Morning walk", 30, "high", due_time="08:00"))
 johnte.add_pet(kyle)
 johnte.add_pet(emmy)
 
-# 5. Build and print today's schedule
+# 5. Build and print today's schedule (tasks come out sorted by time)
 schedule = Schedule(owner=johnte)
 schedule.generate()
 print(schedule.explain())
+
+# 6. Show the filtering methods working in the terminal
+print("\n--- Filtering checks ---")
+
+
+def show(label, tasks):
+    """Print a labeled, one-line summary of a task list."""
+    summary = ", ".join(f"{t.description} ({t.due_time or 'anytime'})" for t in tasks)
+    print(f"{label}: {summary or 'none'}")
+
+
+show("Kyle's tasks", johnte.filter_tasks(pet_name="Kyle"))
+show("Emmy's tasks", johnte.filter_tasks(pet_name="Emmy"))
+show("Pending tasks", johnte.filter_tasks(completed=False))
+show("Completed tasks", johnte.filter_tasks(completed=True))
