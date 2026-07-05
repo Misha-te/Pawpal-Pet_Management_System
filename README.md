@@ -73,14 +73,60 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+PawPal+ goes beyond a flat to-do list. The scheduler sorts, filters, detects
+conflicts, and regenerates recurring tasks. Each feature and the method that
+implements it is documented below (all live in `pawpal_system.py`).
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Time sorting | `time_key()` + `Schedule.generate()` | Orders the plan chronologically; handles unpadded/blank times |
+| Filtering | `UserInfo.filter_tasks()` | Narrow by pet name and/or completion status |
+| Conflict detection | `Schedule.detect_conflicts()` | Warns on overlapping time blocks instead of crashing |
+| Recurring tasks | `Task.next_occurrence()`, `Task.mark_complete()`, `PetInfo.complete_task()` | Auto-creates the next daily/weekly instance |
+
+### Sorting behavior
+
+The plan is ordered by time in `Schedule.generate()`, which sorts the chosen
+tasks with the `time_key()` helper. `time_key()` converts an `"HH:MM"` string
+into minutes-since-midnight, so times sort numerically rather than as text.
+This means an unpadded `"9:00"` correctly sorts **before** `"18:00"` (a plain
+string sort would put it after), and blank/invalid times fall to the end of the
+day. Task *selection* uses a separate ranking (priority, then preferred tasks,
+then shorter duration); the `time_key()` sort is purely for chronological order.
+
+### Filtering behavior
+
+`UserInfo.filter_tasks(pet_name="", completed=None)` returns the owner's tasks
+narrowed by two optional filters that combine with AND:
+
+- `pet_name` — keep only that pet's tasks (blank = all pets)
+- `completed` — `True` for done tasks, `False` for pending, `None` to ignore status
+
+So `owner.filter_tasks(pet_name="Kyle", completed=False)` returns Kyle's pending
+tasks. (`PetInfo.pending_tasks()` is the simpler per-pet, pending-only version.)
+
+### Conflict detection logic
+
+`Schedule.detect_conflicts()` performs a lightweight overlap check. It treats
+each timed task as a block `[due_time, due_time + duration)`, sorts the timed
+tasks chronologically, and flags any pair where a task starts before the
+previous one finishes. It is deliberately forgiving: untimed and invalid-time
+tasks are skipped, and **it never raises** — it returns a list of human-readable
+warning strings (empty when there are no clashes). `Schedule.explain()` prints
+these under a "Schedule conflicts:" heading. Because it works across the owner's
+whole day, it catches conflicts even between tasks belonging to different pets.
+
+### Recurring task logic
+
+When a `"daily"` or `"weekly"` task is completed, the next occurrence is created
+automatically using Python's `timedelta`:
+
+- `Task.next_occurrence()` builds a fresh, not-yet-completed copy with the due
+  date rolled forward — `"daily"` → today + 1 day, `"weekly"` → today + 7 days.
+  A `"once"` task returns `None` (it does not repeat).
+- `Task.mark_complete()` marks the task done and returns that next occurrence.
+- `PetInfo.complete_task()` ties it together: it marks the task complete and
+  automatically adds the new instance back to the pet's task list.
 
 ## 📸 Demo Walkthrough
 
