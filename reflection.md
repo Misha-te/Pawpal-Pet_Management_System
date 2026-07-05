@@ -1,7 +1,11 @@
 # PawPal+ Project Reflection
 
 ## 1. System Design
-
+- These are some of the actions that a user of this system can excute in the app:
+   1. Enter their basic information and their pets information.
+   2. Add or edit tasks for example feeding the pet
+   3. Generate a summary of the daily schedule.
+   
 **a. Initial design**
 
 - Briefly describe your initial UML design.
