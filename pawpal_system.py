@@ -13,6 +13,23 @@ from dataclasses import dataclass, field
 PRIORITY_SCORES = {"low": 1, "medium": 2, "high": 3}
 
 
+def time_key(due_time: str) -> int:
+    """Turn a 'HH:MM' due_time into minutes-since-midnight for sorting.
+
+    Tolerant of missing zero-padding, so '8:00' and '08:00' sort the same
+    (a plain string sort would rank '8:00' after '18:00'). Blank or invalid
+    times return a large number so those tasks sort last.
+    """
+    try:
+        hours, minutes = due_time.strip().split(":")
+        h, m = int(hours), int(minutes)
+    except (ValueError, AttributeError):
+        return 24 * 60  # untimed / invalid → after every real time
+    if 0 <= h < 24 and 0 <= m < 60:
+        return h * 60 + m
+    return 24 * 60
+
+
 @dataclass
 class Task:
     """One pet care task (e.g. a walk, feeding, meds)."""
@@ -78,6 +95,21 @@ class UserInfo:
         """Provide access to every task across all of the owner's pets."""
         return [task for pet in self.pets for task in pet.list_tasks()]
 
+    def filter_tasks(self, pet_name: str = "", completed: bool = None) -> list[Task]:
+        """Return tasks narrowed by pet name and/or completion status.
+
+        Both filters are optional and combine (AND):
+        - pet_name: keep only tasks for that pet (blank = all pets)
+        - completed: keep only done tasks (True) or pending ones (False);
+          None means don't filter on status.
+        """
+        tasks = self.all_tasks()
+        if pet_name:
+            tasks = [t for t in tasks if t.pet_name == pet_name]
+        if completed is not None:
+            tasks = [t for t in tasks if t.completed == completed]
+        return tasks
+
 
 @dataclass
 class Schedule:
@@ -130,7 +162,7 @@ class Schedule:
                 chosen.append(task)
                 remaining -= task.duration_minutes
 
-        self.plan = sorted(chosen, key=lambda t: t.due_time or "99:99")
+        self.plan = sorted(chosen, key=lambda t: time_key(t.due_time))
         return self.plan
 
     def explain(self) -> str:
