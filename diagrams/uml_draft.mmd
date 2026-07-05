@@ -4,6 +4,7 @@ classDiagram
         +str description
         +int duration_minutes
         +str priority
+        +str frequency
         +str due_time
         +bool completed
         +str pet_name
@@ -30,15 +31,16 @@ classDiagram
         +list~PetInfo~ pets
         +add_pet(pet: PetInfo) None
         +list_pets() list~PetInfo~
+        +all_tasks() list~Task~
     }
 
 
     class Schedule {
         +UserInfo owner
         +list~Task~ plan
-        +all_tasks() list~Task~
         +generate() list~Task~
         +explain() str
+        -_pending_tasks() list~Task~
         -_is_preferred(task: Task) bool
     }
 

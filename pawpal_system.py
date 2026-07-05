@@ -20,6 +20,7 @@ class Task:
     description: str
     duration_minutes: int
     priority: str = "medium"
+    frequency: str = "daily"  # e.g. "daily", "weekly", "once"
     due_time: str = ""  # e.g. "08:00"; blank means "any time"
     completed: bool = False
     pet_name: str = ""  # set automatically when added to a pet
@@ -71,6 +72,10 @@ class UserInfo:
     def list_pets(self) -> list[PetInfo]:
         return self.pets
 
+    def all_tasks(self) -> list[Task]:
+        """Provide access to every task across all of the owner's pets."""
+        return [task for pet in self.pets for task in pet.list_tasks()]
+
 
 @dataclass
 class Schedule:
@@ -83,9 +88,9 @@ class Schedule:
     owner: UserInfo
     plan: list[Task] = field(default_factory=list)
 
-    def all_tasks(self) -> list[Task]:
-        """Gather every pending task across all of the owner's pets."""
-        return [task for pet in self.owner.pets for task in pet.pending_tasks()]
+    def _pending_tasks(self) -> list[Task]:
+        """Ask the owner for all tasks, then keep only the ones not done yet."""
+        return [t for t in self.owner.all_tasks() if not t.completed]
 
     def _is_preferred(self, task: Task) -> bool:
         """True if the task matches one of the owner's preferred keywords.
@@ -109,7 +114,7 @@ class Schedule:
         remaining = self.owner.available_minutes
 
         ranked = sorted(
-            self.all_tasks(),
+            self._pending_tasks(),
             key=lambda t: (
                 -t.priority_score(),
                 0 if self._is_preferred(t) else 1,
@@ -142,11 +147,12 @@ class Schedule:
             star = " (preferred)" if self._is_preferred(task) else ""
             lines.append(
                 f"  {when}{task.description}{who} "
-                f"({task.duration_minutes} min) [priority: {task.priority}]{star}"
+                f"({task.duration_minutes} min, {task.frequency}) "
+                f"[priority: {task.priority}]{star}"
             )
 
         chosen = set(id(t) for t in self.plan)
-        skipped = [t for t in self.all_tasks() if id(t) not in chosen]
+        skipped = [t for t in self._pending_tasks() if id(t) not in chosen]
         if skipped:
             lines.append("Skipped (not enough time):")
             for task in skipped:
@@ -167,11 +173,13 @@ if __name__ == "__main__":
     mochi = PetInfo(name="Mochi", species="cat", age=3)
     mochi.add_task(Task("Morning walk", 30, "high", due_time="08:00"))
     mochi.add_task(Task("Feeding", 10, "high", due_time="07:30"))
-    mochi.add_task(Task("Grooming", 25, "low", due_time="18:00"))
+    mochi.add_task(Task("Grooming", 25, "low", frequency="weekly", due_time="18:00"))
 
     biscuit = PetInfo(name="Biscuit", species="dog", age=5)
     biscuit.add_task(Task("Enrichment play", 15, "medium", due_time="16:00"))
-    biscuit.add_task(Task("Feeding", 10, "high", due_time="07:45"))
+    already_fed = Task("Feeding", 10, "high", due_time="07:45")
+    already_fed.mark_complete()  # done earlier — scheduler should skip it
+    biscuit.add_task(already_fed)
 
     owner.add_pet(mochi)
     owner.add_pet(biscuit)
