@@ -32,7 +32,12 @@ explain() — produces a human-readable plan and states why each task was chosen
 **b. Design changes**
 
 - Did your design change during implementation?
+
+Yes. My initial design had Task and PetInfo as separate classes with no link between them.
+
 - If yes, describe at least one change and why you made it.
+
+The main change was creating a connection between Task and PetInfo by adding a pet_name field to Task. I made this change because, without it, there was no way to tell which pet a task belonged to — in a household with more than one pet, a task like "Feeding" or "Morning walk" was ambiguous. Adding pet_name lets the schedule show exactly which pet each task is for (e.g. "Morning walk for Mochi"). I used a simple pet_name string rather than a full PetInfo reference to keep the UI simple, accepting the tradeoff that the link isn't strictly enforced.
 
 ---
 
