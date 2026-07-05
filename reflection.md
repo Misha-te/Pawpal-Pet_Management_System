@@ -57,7 +57,12 @@ Finally, I clarified the responsibilities between Owner and Scheduler. The Owner
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+
+My scheduler makes a simplicity/speed vs. optimality tradeoff by using a greedy selection strategy. In generate(), it ranks the tasks (by priority, then the owner's preferred tasks, then shorter duration) and adds them one at a time until the time budget runs out. It never goes back to reconsider an earlier choice. This means it is not guaranteed to find the best possible combination of tasks. For example, with a 30-minute budget and three tasks — one high-priority 30-minute task and two medium 15-minute tasks — greedy picks the single high-priority task and stops, completing one task. But the two 15-minute tasks would also fit in 30 minutes and would complete two tasks. A true optimizer (a knapsack-style algorithm) might prefer that, but greedy can't see it because it commits to the high-priority task first and never backtracks.
+
 - Why is that tradeoff reasonable for this scenario?
+
+It is reasonable because the goal of this app is to give a pet owner a quick, sensible, and understandable daily plan, not a mathematically perfect one. The greedy approach runs in a single pass (basically just the cost of the sort) and the logic is easy to read and explain, which matters for both the user trusting the plan and for me maintaining the code. It also respects what the owner cares about most — high-priority pet care (like feeding or meds) always gets scheduled first. A full optimization algorithm would be more complex and harder to explain for only a small, occasional gain, so for a daily pet-care to-do list the greedy strategy is the right call.
 
 ---
 
