@@ -128,6 +128,13 @@ automatically using Python's `timedelta`:
 - `PetInfo.complete_task()` ties it together: it marks the task complete and
   automatically adds the new instance back to the pet's task list.
 
+## 🧭 Class Diagram (UML)
+
+The final class design, reflecting the code in `pawpal_system.py`. Source:
+[`diagrams/uml_final.mmd`](diagrams/uml_final.mmd).
+
+![PawPal+ UML class diagram](diagrams/uml_final.png)
+
 ## 📸 Demo Walkthrough
 
 Describe your app in numbered steps so a reader can follow along without watching a video:

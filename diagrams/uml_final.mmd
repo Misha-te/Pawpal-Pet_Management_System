@@ -1,0 +1,67 @@
+classDiagram
+    %% PawPal+ final UML — matches pawpal_system.py after the build.
+    %% Additions since the Phase 1 draft are marked with "NEW".
+
+    class Task {
+        +str description
+        +int duration_minutes
+        +str priority
+        +str frequency
+        +str due_time
+        +date due_date
+        +bool completed
+        +str pet_name
+        +priority_score() int
+        +next_occurrence() Task
+        +mark_complete() Task
+    }
+
+    class PetInfo {
+        +str name
+        +str species
+        +int age
+        +list~Task~ tasks
+        +add_task(task: Task) None
+        +list_tasks() list~Task~
+        +pending_tasks() list~Task~
+        +complete_task(task: Task) Task
+    }
+
+    class UserInfo {
+        +str name
+        +int available_minutes
+        +dict preferences
+        +list~PetInfo~ pets
+        +add_pet(pet: PetInfo) None
+        +list_pets() list~PetInfo~
+        +all_tasks() list~Task~
+        +filter_tasks(pet_name: str, completed: bool) list~Task~
+    }
+
+    class Schedule {
+        +UserInfo owner
+        +list~Task~ plan
+        +generate() list~Task~
+        +detect_conflicts() list~str~
+        +explain() str
+        -_pending_tasks() list~Task~
+        -_is_preferred(task: Task) bool
+    }
+
+    %% Module-level helper (not a class): converts "HH:MM" -> minutes for sorting.
+    class time_key {
+        <<function>>
+        +time_key(due_time: str) int
+    }
+
+    UserInfo "1" --> "*" PetInfo : owns
+    PetInfo "1" o-- "*" Task : has
+    Schedule "1" --> "1" UserInfo : plans for
+    Schedule ..> Task : selects, orders, checks conflicts
+    Task ..> Task : next_occurrence() creates
+    Schedule ..> time_key : sorts / conflict-checks by time
+
+    note for Task "next_occurrence() uses datetime.timedelta: daily -> today+1 day, weekly -> today+7 days, 'once' -> None. mark_complete() returns it."
+    note for PetInfo "complete_task() marks a task done and auto-adds the returned next occurrence."
+    note for UserInfo "filter_tasks() narrows by pet name and/or completion status (both optional, combine with AND)."
+    note for Schedule "detect_conflicts() returns warning strings for overlapping time blocks; it never raises."
