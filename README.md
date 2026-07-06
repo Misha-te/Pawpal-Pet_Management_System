@@ -240,4 +240,4 @@ order (sorting), the two overlaps are flagged (conflict warnings), "Evening walk
 is dropped because the 120-minute budget is spent (priority selection), and the
 filtering checks show tasks narrowed by pet and by status.
 
-**Screenshots** *(optional, for human reviewers)*: <!-- Insert Streamlit screenshots here if desired -->
+!-- Insert Streamlit screenshots here if desired -->
