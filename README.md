@@ -23,6 +23,13 @@ owner's pets and tasks. (Implementation details and method names are in the
   across all of them on a single timeline.
 - **🧾 Explainable plans** — every plan comes with a readable summary of what was
   scheduled, what conflicts exist, and what was skipped for lack of time.
+- **💾 Persistence between runs** — the full owner→pets→tasks graph is saved to a
+  `data.json` file and reloaded on the next run, so pets and tasks are remembered
+  even after the program exits.
+- **🎨 Friendly CLI output** — the command-line demo (`main.py`) prints structured
+  tables via the `tabulate` library, with per-task-type emojis (🚶 🍽️ ✂️ 🏥),
+  color-coded priorities (high=red, medium=yellow, low=green), and ✅/⏳ status
+  badges.
 
 ## Scenario
 
@@ -67,17 +74,21 @@ pip install -r requirements.txt
 ## 🖥️ Sample Output
 
 A quick look at the generated plan (see the full run under
-[Demo Walkthrough](#-demo-walkthrough)):
+[Demo Walkthrough](#-demo-walkthrough)). In a real terminal the priorities and
+status badges are color-coded; here they show as plain text:
 
 ```
-$ python main.py
-Daily plan for Johnte (115/120 min used):
-  07:30 — Feeding for Kyle (10 min, daily) [priority: high]
-  08:00 — Morning walk for Kyle (30 min, daily) [priority: high]
-  08:15 — Feeding for Emmy (10 min, daily) [priority: high]
-  12:00 — Vet visit for Kyle (30 min, daily) [priority: high]
-  12:15 — Grooming for Emmy (20 min, daily) [priority: medium]
-  18:00 — Litter box cleaning for Emmy (15 min, daily) [priority: medium]
+🐾 Daily plan for Johnte (115/120 min used)
+╭────────┬────────────────────────┬───────┬────────────┬────────────┬─────────────┬────────────╮
+│ Time   │ Task                   │ Pet   │ Duration   │ Priority   │ Frequency   │ Status     │
+├────────┼────────────────────────┼───────┼────────────┼────────────┼─────────────┼────────────┤
+│ 07:30  │ 🍽️ Feeding             │ Kyle  │ 10 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 08:00  │ 🚶 Morning walk        │ Kyle  │ 30 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 08:15  │ 🍽️ Feeding             │ Emmy  │ 10 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 12:00  │ 🏥 Vet visit           │ Kyle  │ 30 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 12:15  │ ✂️ Grooming            │ Emmy  │ 20 min     │ MEDIUM     │ daily       │ ⏳ pending │
+│ 18:00  │ 🧹 Litter box cleaning │ Emmy  │ 15 min     │ MEDIUM     │ daily       │ ⏳ pending │
+╰────────┴────────────────────────┴───────┴────────────┴────────────┴─────────────┴────────────╯
 ```
 
 ## 🧪 Testing PawPal+
@@ -108,6 +119,7 @@ implements it is documented below (all live in `pawpal_system.py`).
 | Filtering | `UserInfo.filter_tasks()` | Narrow by pet name and/or completion status |
 | Conflict detection | `Schedule.detect_conflicts()` | Warns on overlapping time blocks instead of crashing |
 | Recurring tasks | `Task.next_occurrence()`, `Task.mark_complete()`, `PetInfo.complete_task()` | Auto-creates the next daily/weekly instance |
+| Persistence | `UserInfo.save_to_json()`, `UserInfo.load_from_json()` | Saves/loads the full owner graph to `data.json` between runs |
 
 ### Sorting behavior
 
@@ -152,6 +164,58 @@ automatically using Python's `timedelta`:
 - `Task.mark_complete()` marks the task done and returns that next occurrence.
 - `PetInfo.complete_task()` ties it together: it marks the task complete and
   automatically adds the new instance back to the pet's task list.
+
+### Persistence logic (saving between runs)
+
+PawPal+ remembers pets and tasks between runs by saving the owner's entire object
+graph to a **`data.json`** file. All of this lives in `pawpal_system.py`.
+
+**The workflow:**
+
+1. **Save** — call `owner.save_to_json()` after making changes. It walks the full
+   `UserInfo → PetInfo → Task` graph, turns it into a plain dictionary, and writes
+   it to `data.json` (defaults to the file named by the module's `DATA_FILE`
+   constant; pass a path to override). The file is rewritten as one complete
+   snapshot each time, so it never ends up half-updated.
+2. **Load** — on the next run, call `UserInfo.load_from_json()` to read `data.json`
+   back and rebuild the owner, every pet, and every task exactly as they were.
+   If the file doesn't exist yet (the very first run), it returns `None`, so the
+   caller can start from a fresh owner instead of crashing.
+
+**How the conversion works** — each class knows how to convert itself:
+
+- `Task.to_dict()` / `Task.from_dict()` — the tricky field is `due_date`, which is
+  a Python `date` object and isn't valid JSON. It's stored as an ISO string
+  (e.g. `"2026-07-06"`) on save and parsed back with `date.fromisoformat()` on load
+  (`None` stays `null`).
+- `PetInfo.to_dict()` / `PetInfo.from_dict()` — serializes the pet's own fields and
+  each of its tasks.
+- `UserInfo.to_dict()` / `UserInfo.from_dict()` — serializes the owner plus every
+  pet, so one call captures the whole graph.
+
+**Typical usage:**
+
+```python
+from pawpal_system import UserInfo, PetInfo, Task
+
+# Load a saved owner, or build a fresh one on the first run.
+owner = UserInfo.load_from_json() or UserInfo(name="Jordan", available_minutes=120)
+
+# ...add pets/tasks, complete tasks, etc...
+
+owner.save_to_json()  # persist for next time
+```
+
+> `data.json` holds runtime data (it's generated by the app), so it's listed in
+> `.gitignore` and not committed to the repo.
+
+**Files modified to add persistence:**
+
+- **`pawpal_system.py`** — added `import json` and a `DATA_FILE` constant;
+  added `to_dict()`/`from_dict()` to `Task`, `PetInfo`, and `UserInfo`; and added
+  the `UserInfo.save_to_json()` and `UserInfo.load_from_json()` methods.
+- **`.gitignore`** — added `data.json` so generated runtime data isn't committed.
+- **`README.md`** — documented the persistence workflow (this section).
 
 ## 🧭 Class Diagram (UML)
 
@@ -211,33 +275,67 @@ review the current task list, and generate an explained daily plan.
 Running the command-line demo builds an owner ("Johnte") with two pets (Kyle and
 Emmy) and several tasks — added deliberately out of order and including two
 overlapping tasks — then prints the sorted plan, conflict warnings, skipped
-tasks, and filtering checks:
+tasks, and filtering checks. The plan and filtering checks are rendered as
+`tabulate` grid tables with task-type emojis and color-coded priority/status
+(colors show as plain text below):
 
 ```
-$ python main.py
-Daily plan for Johnte (115/120 min used):
-  07:30 — Feeding for Kyle (10 min, daily) [priority: high]
-  08:00 — Morning walk for Kyle (30 min, daily) [priority: high]
-  08:15 — Feeding for Emmy (10 min, daily) [priority: high]
-  12:00 — Vet visit for Kyle (30 min, daily) [priority: high]
-  12:15 — Grooming for Emmy (20 min, daily) [priority: medium]
-  18:00 — Litter box cleaning for Emmy (15 min, daily) [priority: medium]
-Schedule conflicts:
-  ⚠ 'Feeding' (08:15) starts before 'Morning walk' finishes — overlap of 15 min
-  ⚠ 'Grooming' (12:15) starts before 'Vet visit' finishes — overlap of 15 min
-Skipped (not enough time):
-  - Evening walk (25 min)
+🐾 Daily plan for Johnte (115/120 min used)
+╭────────┬────────────────────────┬───────┬────────────┬────────────┬─────────────┬────────────╮
+│ Time   │ Task                   │ Pet   │ Duration   │ Priority   │ Frequency   │ Status     │
+├────────┼────────────────────────┼───────┼────────────┼────────────┼─────────────┼────────────┤
+│ 07:30  │ 🍽️ Feeding             │ Kyle  │ 10 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 08:00  │ 🚶 Morning walk        │ Kyle  │ 30 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 08:15  │ 🍽️ Feeding             │ Emmy  │ 10 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 12:00  │ 🏥 Vet visit           │ Kyle  │ 30 min     │ HIGH       │ daily       │ ⏳ pending │
+│ 12:15  │ ✂️ Grooming            │ Emmy  │ 20 min     │ MEDIUM     │ daily       │ ⏳ pending │
+│ 18:00  │ 🧹 Litter box cleaning │ Emmy  │ 15 min     │ MEDIUM     │ daily       │ ⏳ pending │
+╰────────┴────────────────────────┴───────┴────────────┴────────────┴─────────────┴────────────╯
 
---- Filtering checks ---
-Kyle's tasks: Evening walk (9:00), Feeding (07:30), Morning walk (08:00), Vet visit (12:00)
-Emmy's tasks: Litter box cleaning (18:00), Feeding (08:15), Grooming (12:15)
-Pending tasks: Evening walk (9:00), Feeding (07:30), Morning walk (08:00), Vet visit (12:00), Litter box cleaning (18:00), Feeding (08:15), Grooming (12:15)
-Completed tasks: none
+⚠️  Schedule conflicts:
+  'Feeding' (08:15) starts before 'Morning walk' finishes — overlap of 15 min
+  'Grooming' (12:15) starts before 'Vet visit' finishes — overlap of 15 min
+
+⏭️  Skipped (not enough time):
+  🚶 Evening walk (25 min)
+
+🔍 Filtering checks
+╭──────────────┬────────────────────────────────────────────────────────────────────╮
+│ Filter       │ Tasks                                                              │
+├──────────────┼────────────────────────────────────────────────────────────────────┤
+│ Kyle's tasks │ 🚶 Evening walk (9:00), 🍽️ Feeding (07:30), 🚶 Morning walk ...    │
+│ Emmy's tasks │ 🧹 Litter box cleaning (18:00), 🍽️ Feeding (08:15), ✂️ Grooming ... │
+│ Pending      │ 🚶 Evening walk (9:00), 🍽️ Feeding (07:30), ...                    │
+│ Completed    │ none                                                               │
+╰──────────────┴────────────────────────────────────────────────────────────────────╯
 ```
 
 Notice how the output demonstrates the algorithms directly: tasks print in time
 order (sorting), the two overlaps are flagged (conflict warnings), "Evening walk"
 is dropped because the 120-minute budget is spent (priority selection), and the
 filtering checks show tasks narrowed by pet and by status.
+
+### CLI formatting features
+
+The command-line demo dresses up its output with three kinds of formatting, all
+implemented in `main.py` (kept out of `pawpal_system.py` so the core logic stays
+presentation-free, since the Streamlit app renders its own way):
+
+| Feature | How it's done | Function(s) / library |
+|---------|---------------|-----------------------|
+| **Structured tables** | The daily plan and filtering checks are rendered as `rounded_grid` tables | [`tabulate`](https://pypi.org/project/tabulate/) library; `plan_table()` |
+| **Task-type emojis** | Each task gets an icon based on keywords in its description (🚶 walk, 🍽️ feed, ✂️ groom, 🏥 vet, 🧹 litter, 🎾 play, 💊 meds, 🐾 default) | `task_emoji()` + the `TASK_EMOJIS` map |
+| **Color-coded priority** | HIGH=red, MEDIUM=yellow, LOW=green | `priority_cell()` + `PRIORITY_COLORS` |
+| **Status badges** | ✅ green for done, ⏳ yellow for pending | `status_badge()` |
+| **Colored headings/warnings** | Conflicts in red, skipped tasks dimmed, headers bold | `color()` + the `COLORS` map |
+
+**Libraries used:**
+
+- **[`tabulate`](https://pypi.org/project/tabulate/)** (added to `requirements.txt`)
+  — draws the grid tables. Install it with `pip install -r requirements.txt`.
+- **ANSI escape codes** — colors are applied with plain ANSI codes (e.g. `\033[91m`
+  for red) via the small `color()` helper, so no extra color dependency is needed.
+  Emojis are just Unicode characters. `tabulate` measures column widths correctly
+  even with color codes present, so the tables stay aligned.
 
 !-- Insert Streamlit screenshots here if desired -->

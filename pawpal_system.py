@@ -7,8 +7,12 @@ Backbone for the pet care planner. Four objects:
 - Schedule : the scheduler that plans across ALL of the owner's pets
 """
 
+import json
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+
+# Default file the owner's data is saved to / loaded from between runs.
+DATA_FILE = "data.json"
 
 # Maps a priority label to a number the scheduler can sort by.
 PRIORITY_SCORES = {"low": 1, "medium": 2, "high": 3}
@@ -77,6 +81,38 @@ class Task:
         self.completed = True
         return self.next_occurrence()
 
+    def to_dict(self) -> dict:
+        """Convert this task to a plain dict ready for JSON.
+
+        Everything is already JSON-friendly except due_date, which is a
+        date object; store it as an ISO string ('2026-07-05') or null.
+        """
+        return {
+            "description": self.description,
+            "duration_minutes": self.duration_minutes,
+            "priority": self.priority,
+            "frequency": self.frequency,
+            "due_time": self.due_time,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "completed": self.completed,
+            "pet_name": self.pet_name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Task":
+        """Rebuild a Task from a dict produced by to_dict()."""
+        due_date = data.get("due_date")
+        return cls(
+            description=data["description"],
+            duration_minutes=data["duration_minutes"],
+            priority=data.get("priority", "medium"),
+            frequency=data.get("frequency", "daily"),
+            due_time=data.get("due_time", ""),
+            due_date=date.fromisoformat(due_date) if due_date else None,
+            completed=data.get("completed", False),
+            pet_name=data.get("pet_name", ""),
+        )
+
 
 @dataclass
 class PetInfo:
@@ -111,6 +147,25 @@ class PetInfo:
         if next_task is not None:
             self.add_task(next_task)
         return next_task
+
+    def to_dict(self) -> dict:
+        """Convert this pet (and all its tasks) to a JSON-ready dict."""
+        return {
+            "name": self.name,
+            "species": self.species,
+            "age": self.age,
+            "tasks": [task.to_dict() for task in self.tasks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PetInfo":
+        """Rebuild a PetInfo (and its tasks) from a dict produced by to_dict()."""
+        return cls(
+            name=data["name"],
+            species=data.get("species", "dog"),
+            age=data.get("age", 0),
+            tasks=[Task.from_dict(t) for t in data.get("tasks", [])],
+        )
 
 
 @dataclass
@@ -148,6 +203,49 @@ class UserInfo:
         if completed is not None:
             tasks = [t for t in tasks if t.completed == completed]
         return tasks
+
+    def to_dict(self) -> dict:
+        """Convert the whole owner→pets→tasks graph to a JSON-ready dict."""
+        return {
+            "name": self.name,
+            "available_minutes": self.available_minutes,
+            "preferences": self.preferences,
+            "pets": [pet.to_dict() for pet in self.pets],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "UserInfo":
+        """Rebuild an owner (with all pets and tasks) from a dict."""
+        return cls(
+            name=data["name"],
+            available_minutes=data.get("available_minutes", 120),
+            preferences=data.get("preferences", {}),
+            pets=[PetInfo.from_dict(p) for p in data.get("pets", [])],
+        )
+
+    def save_to_json(self, path: str = DATA_FILE) -> None:
+        """Save this owner and all their pets/tasks to a JSON file.
+
+        Writing happens as one dump of the full object graph, so the file
+        always holds a complete, consistent snapshot. Call this after any
+        change you want to persist between application runs.
+        """
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load_from_json(cls, path: str = DATA_FILE) -> "UserInfo":
+        """Load an owner (with pets and tasks) previously saved to JSON.
+
+        Returns None if the file doesn't exist yet (e.g. the very first run),
+        so callers can fall back to building a fresh owner.
+        """
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return None
+        return cls.from_dict(data)
 
 
 @dataclass
