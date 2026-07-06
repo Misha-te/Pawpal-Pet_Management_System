@@ -2,6 +2,28 @@
 
 You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
 
+## ✨ Features
+
+PawPal+ is more than a to-do list — it runs real scheduling algorithms over an
+owner's pets and tasks. (Implementation details and method names are in the
+[Smarter Scheduling](#-smarter-scheduling) section.)
+
+- **🗓️ Sorting by time** — the daily plan is ordered chronologically, parsing
+  `HH:MM` times into minutes so even unpadded times like `9:00` sort correctly
+  (before `18:00`), with untimed tasks placed last.
+- **🎯 Priority-based selection** — a greedy planner fills the day's time budget,
+  ranking tasks by priority, then owner preferences, then duration.
+- **⚠️ Conflict warnings** — overlapping time blocks are detected and reported as
+  plain-language warnings instead of crashing the program.
+- **🔁 Daily & weekly recurrence** — completing a recurring task automatically
+  generates its next occurrence (daily → tomorrow, weekly → +7 days) using
+  Python's `timedelta`; one-off tasks do not repeat.
+- **🔍 Task filtering** — tasks can be filtered by pet and/or completion status.
+- **🐾 Multi-pet planning** — one owner can have many pets; the scheduler plans
+  across all of them on a single timeline.
+- **🧾 Explainable plans** — every plan comes with a readable summary of what was
+  scheduled, what conflicts exist, and what was skipped for lack of time.
+
 ## Scenario
 
 A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
@@ -44,14 +66,17 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
-
+A quick look at the generated plan (see the full run under
+[Demo Walkthrough](#-demo-walkthrough)):
 
 ```
 $ python main.py
-Daily plan for Johnte (55/120 min used):
+Daily plan for Johnte (115/120 min used):
   07:30 — Feeding for Kyle (10 min, daily) [priority: high]
   08:00 — Morning walk for Kyle (30 min, daily) [priority: high]
+  08:15 — Feeding for Emmy (10 min, daily) [priority: high]
+  12:00 — Vet visit for Kyle (30 min, daily) [priority: high]
+  12:15 — Grooming for Emmy (20 min, daily) [priority: medium]
   18:00 — Litter box cleaning for Emmy (15 min, daily) [priority: medium]
 ```
 
@@ -137,12 +162,82 @@ The final class design, reflecting the code in `pawpal_system.py`. Source:
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+PawPal+ can be used two ways: an interactive **Streamlit web app** (`app.py`) and
+a **command-line demo** (`main.py`). This walkthrough covers both.
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+### The main UI features (Streamlit)
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+Launch it with `streamlit run app.py`. The app is a single page with three areas:
+
+1. **Owner & Pet** — enter the owner's name, the minutes of care time available
+   today, the pet's name, and its species.
+2. **Tasks** — add care tasks with a title, duration, priority, due time
+   (`HH:MM`), and frequency (`daily` / `weekly` / `once`). Added tasks appear in a
+   "Current tasks" table.
+3. **Build Schedule** — click **Generate schedule** to run the planner and view
+   the results.
+
+Actions a user can perform: set their daily time budget, add pet-care tasks,
+review the current task list, and generate an explained daily plan.
+
+### Example workflow
+
+1. **Enter owner + pet** — e.g. owner "Jordan" with `60` minutes available, pet
+   "Mochi" (cat).
+2. **Add tasks** — "Morning walk" (30 min, high, `08:00`, daily), then "Feeding"
+   (10 min, high, `08:15`, daily), then "Grooming" (25 min, low, `18:00`, weekly).
+3. **Generate the schedule** — click **Generate schedule**.
+4. **Read the results**, which the app renders as:
+   - an `st.success` summary (tasks scheduled + minutes used),
+   - a **sorted plan table** (chronological),
+   - `st.warning` **conflict** messages for overlapping tasks,
+   - a **skipped** table for anything that didn't fit the time budget,
+   - and a collapsible full text explanation.
+
+### Key scheduler behaviors shown
+
+- **Sorting by time** — the plan table is always chronological, even if tasks are
+  entered out of order or with unpadded times (`9:00` sorts before `18:00`).
+- **Priority selection under a budget** — with limited minutes, high-priority
+  tasks are kept and lower-value ones are pushed to the "Skipped" list.
+- **Conflict warnings** — a 30-min task at `08:00` and another at `08:15` produce
+  a clear overlap warning rather than an error.
+- **Recurring tasks** — `daily`/`weekly` tasks are labeled by frequency and, when
+  completed, spawn their next occurrence (`daily` → tomorrow, `weekly` → +7 days).
+- **Filtering** — tasks can be filtered by pet and by completion status.
+
+### Sample CLI output (`main.py`)
+
+Running the command-line demo builds an owner ("Johnte") with two pets (Kyle and
+Emmy) and several tasks — added deliberately out of order and including two
+overlapping tasks — then prints the sorted plan, conflict warnings, skipped
+tasks, and filtering checks:
+
+```
+$ python main.py
+Daily plan for Johnte (115/120 min used):
+  07:30 — Feeding for Kyle (10 min, daily) [priority: high]
+  08:00 — Morning walk for Kyle (30 min, daily) [priority: high]
+  08:15 — Feeding for Emmy (10 min, daily) [priority: high]
+  12:00 — Vet visit for Kyle (30 min, daily) [priority: high]
+  12:15 — Grooming for Emmy (20 min, daily) [priority: medium]
+  18:00 — Litter box cleaning for Emmy (15 min, daily) [priority: medium]
+Schedule conflicts:
+  ⚠ 'Feeding' (08:15) starts before 'Morning walk' finishes — overlap of 15 min
+  ⚠ 'Grooming' (12:15) starts before 'Vet visit' finishes — overlap of 15 min
+Skipped (not enough time):
+  - Evening walk (25 min)
+
+--- Filtering checks ---
+Kyle's tasks: Evening walk (9:00), Feeding (07:30), Morning walk (08:00), Vet visit (12:00)
+Emmy's tasks: Litter box cleaning (18:00), Feeding (08:15), Grooming (12:15)
+Pending tasks: Evening walk (9:00), Feeding (07:30), Morning walk (08:00), Vet visit (12:00), Litter box cleaning (18:00), Feeding (08:15), Grooming (12:15)
+Completed tasks: none
+```
+
+Notice how the output demonstrates the algorithms directly: tasks print in time
+order (sorting), the two overlaps are flagged (conflict warnings), "Evening walk"
+is dropped because the 120-minute budget is spent (priority selection), and the
+filtering checks show tasks narrowed by pet and by status.
+
+**Screenshots** *(optional, for human reviewers)*: <!-- Insert Streamlit screenshots here if desired -->
